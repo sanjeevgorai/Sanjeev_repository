@@ -1,0 +1,138 @@
+[root@ansible-prod SLE_11_SP3]# cat suse_playbook_OS_Work.yml
+---
+- hosts: all
+  remote_user: cloud
+  become: True
+  tasks:
+    - name: Insert data in /etc/sysconfig/network/dhcp
+      shell: cat /etc/sysconfig/network/dhcp
+      register: file_check
+      tags: tag2
+
+    - name: Do this task if DHCLIENT_PRIMARY_DEVICE present in file
+      lineinfile: path=/etc/sysconfig/network/dhcp regexp='^DHCLIENT_PRIMARY_DEVICE=(.*)' line='DHCLIENT_PRIMARY_DEVICE="yes"' backup=yes
+      when: file_check.stdout.find('DHCLIENT_PRIMARY_DEVICE') != -1
+      tags: tag3
+
+    - name: Do this task if DHCLIENT_USE_LAST_LEASE present in file
+      lineinfile: path=/etc/sysconfig/network/dhcp regexp='^DHCLIENT_USE_LAST_LEASE=(.*)' line='DHCLIENT_USE_LAST_LEASE="no"' backup=yes
+      when: (file_check.stdout.find('DHCLIENT_USE_LAST_LEASE') != -1 and file_check.stdout.find('DHCLIENT_PRIMARY_DEVICE') != -1)
+      tags: tag4
+
+    - name: Do this task if DHCLIENT_USE_LAST_LEASE not present in file
+      lineinfile: dest=/etc/sysconfig/network/dhcp line='DHCLIENT_USE_LAST_LEASE="no"'
+      when: (file_check.stdout.find('DHCLIENT_USE_LAST_LEASE') == -1 and file_check.stdout.find('DHCLIENT_PRIMARY_DEVICE') != -1)
+      tags:
+        - tag5
+
+######  "Check if Initrd file contains persistent routes: lsinitrd /boot/initrd-2.6.32.12-0.7-default |grep persistent|grep net if so refer pdf"
+#  Need to work on above section
+    - name: Register value of  /etc/ssh/sshd_config
+      shell: grep -v ^# /etc/ssh/sshd_config | grep ^'PasswordAuthentication yes'$
+      register: var1
+      ignore_errors: yes
+      tags: tag6
+      shell: grep ^#PasswordAuthentication /etc/ssh/sshd_config
+      register: var2
+      ignore_errors: yes
+      tags: tag7
+      shell: grep ^PasswordAuthentication /etc/ssh/sshd_config
+      register: var3
+      ignore_errors: yes
+      tags: tag8
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='PasswordAuthentication yes' line='PasswordAuthentication no' backup=yes
+      when: var1.rc == 0
+      ignore_errors: yes
+      tags: tag9
+    - lineinfile: dest=/etc/ssh/sshd_config insertafter='^#PasswordAuthentication' line='PasswordAuthentication no' backup=yes
+      when: var2.rc == 0
+      ignore_errors: yes
+      tags: tag10
+    - lineinfile: dest=/etc/ssh/sshd_config insertafter='^#PasswordAuthentication' line='PasswordAuthentication no' backup=yes
+      when: var3.rc != 0
+      ignore_errors: yes
+      tags: tag11
+    - lineinfile: dest=/etc/ssh/sshd_config insertafter='^#ChallengeResponseAuthentication' line='ChallengeResponseAuthentication=no' backup=yes
+      tags: tag12
+      ignore_errors: yes
+    - shell: cat /etc/ssh/sshd_config | grep '^UsePAM'
+      register: var5
+      tags: tag13
+    - lineinfile: dest=/etc/ssh/sshd_config regexp='^UsePAM\s+' line='UsePAM=yes' backup=yes
+      when: var5.rc != 0
+      ignore_errors: yes
+      tags: tag14
+    - shell: grep ^disable_root /etc/ssh/sshd_config
+      register: var4
+      ignore_errors: yes
+      tags: tag15
+    - lineinfile: dest=/etc/ssh/sshd_config line='disable_root{{ ":" }} true'
+      when: var4.rc != 0
+      ignore_errors: yes
+      tags:
+        - tag16
+############################################################################################3
+#  vars_prompt:
+#    - name: "package_url"
+#      prompt: "Please enter URL for download ixgbevf : "
+
+#  tasks:
+#  - block:
+#    - name: Download package
+#      get_url:
+#        url: "{{ package_url }}"
+#        dest: /usr/local/bin
+#        mode: 0755
+#    rescue:
+#    - name: Exit from playbook
+#      debug: msg="URL is not correct"
+#    tags: tag17
+#  - name: Getting tar ball name
+#    shell: ls -tr /usr/local/bin | grep tgz
+#    register: tar_var
+#  - name: Unarchive the tar ball
+#    unarchive:
+#      src: /usr/local/bin/'{{ tar_var }}'
+#      dest: /usr/local/bin/
+#  - name: Getting name of destination
+#    shell: ls -tr  /usr/local/bin/ | basename | gep tgz
+#  - name: Compile the packages
+#    make:
+#     chdir: /usr/local/bin/
+
+#######################################################################333
+
+    - name:  Clear history
+      shell: echo "">/root/.bash_history
+      ignore_errors: yes
+      tags: tag20
+
+    - name: Run history -c
+      shell: history -c
+      ignore_errors: yes
+      tags: tag21
+
+    - name: Deleting /var/lib/cloud directory
+      shell: rm -rf /var/lib/cloud/*
+      ignore_errors: yes
+      tags: tag22
+
+    - name: Clear auth files and logs for root
+      shell: echo "">/root/.ssh/authorized_keys
+      ignore_errors: yes
+      tags: tag23
+
+    - name: Clear auth files and logs for non root
+      shell: echo "">/home/cloud/.ssh/authorized_keys
+      ignore_errors: yes
+      tags: tag24
+
+    - name: Clear /var/log/*
+      shell: rm -rf /var/log/*
+      ignore_errors: yes
+      tags: tag25
+
+    - name: Clear history
+      shell: history -w;echo > /root/.bash_history;history-c;history -c;history -c
+      ignore_errors: yes
+      tags: tag26
